@@ -3,30 +3,28 @@ kind: Deployment
 metadata:
   name: {{ include "metrics-app.fullname" . }}
   labels:
-    {{- include "metrics-app.labels" . | nindent 4 }}
+    app: {{ include "metrics-app.name" . }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: 1
   selector:
     matchLabels:
-      {{- include "metrics-app.selectorLabels" . | nindent 6 }}
+      app: {{ include "metrics-app.name" . }}
   template:
     metadata:
       labels:
-        {{- include "metrics-app.selectorLabels" . | nindent 8 }}
-      annotations:
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        app: {{ include "metrics-app.name" . }}
     spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          env:
-            - name: PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "metrics-app.fullname" . }}
-                  key: password
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
+          env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "metrics-app.fullname" . }}-secret
+                  key: PASSWORD
