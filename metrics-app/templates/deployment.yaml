@@ -28,3 +28,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "metrics-app.fullname" . }}-secret
                   key: PASSWORD
+          volumeMounts:
+            - name: config-volume
+              mountPath: /metrics.py
+              subPath: metrics.py
+            - name: config-volume
+              mountPath: /collector.py
+              subPath: collector.py
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "metrics-app.fullname" . }}-config
