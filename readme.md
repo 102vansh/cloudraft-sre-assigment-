@@ -225,9 +225,66 @@ After the fix:
    - Implemented proper ingress routing
    - Used Helm for templating and packaging
 
-4. **GitOps**:
+4. **Helm Chart Best Practices**:
+   - Organized chart structure following Helm conventions
+   - Used templating for reusable components
+   - Implemented proper labels and annotations
+   - Created helper functions in _helpers.tpl
+   - Parameterized configuration via values.yaml
+   - Included appropriate documentation in NOTES.txt
+
+5. **GitOps**:
    - Used ArgoCD for continuous deployment
    - Stored configuration as code in a Git repository
+
+## Helm Chart Structure
+
+The Helm chart for the application follows the standard structure:
+
+```
+metrics-app/
+├── Chart.yaml              # Chart metadata (name, version, description)
+├── values.yaml             # Default configuration values
+├── templates/
+│   ├── _helpers.tpl        # Template helper functions
+│   ├── deployment.yaml     # Kubernetes Deployment resource
+│   ├── service.yaml        # Kubernetes Service resource
+│   ├── ingress.yaml        # Kubernetes Ingress resource
+│   ├── secret.yaml         # Kubernetes Secret for PASSWORD
+│   ├── configmap.yaml      # ConfigMap for fixed Python files
+│   ├── serviceaccount.yaml # Service Account configuration
+│   └── tests/              # Test templates
+│       └── test-connection.yaml
+└── .helmignore             # Patterns to ignore when packaging
+```
+
+Key components:
+
+1. **Chart.yaml**: Contains metadata about the chart
+   ```yaml
+   apiVersion: v2
+   name: metrics-app
+   description: A Helm chart for the metrics application
+   type: application
+   version: 0.1.0
+   appVersion: "1.1"
+   ```
+
+2. **values.yaml**: Default configuration values
+   ```yaml
+   image:
+     repository: ghcr.io/cloudraftio/metrics-app
+     tag: "1.1"
+     pullPolicy: IfNotPresent
+
+   service:
+     type: ClusterIP
+     port: 8080
+
+   serviceAccount:
+     create: true
+     name: ""
+   ```
 
 ## Security Considerations for Future Prevention
 
@@ -291,31 +348,111 @@ The application had a serious performance and security issue with code that was 
    kind create cluster --config kind-config.yaml
    ```
 
-2. **Install NGINX Ingress Controller**:
+2. **Install Helm**:
+   ```bash
+   # Download and install Helm
+   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+   # Verify installation
+   helm version
+   ```
+
+3. **Install NGINX Ingress Controller**:
    ```bash
    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
    kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
    ```
 
-3. **Install ArgoCD**:
+4. **Deploy with Helm**:
+   ```bash
+   # Validate the Helm chart
+   helm lint metrics-app
+
+   # Deploy the application
+   helm install my-metrics-app ./metrics-app
+   ```
+
+5. **Create and Configure Helm Chart**:
+   ```bash
+   # Create a new Helm chart
+   helm create metrics-app
+
+   # Navigate to the chart directory
+   cd metrics-app
+
+   # Modify the chart files as described in this documentation
+   # - Update values.yaml with the correct image and configuration
+   # - Create/update templates for deployment, service, ingress, etc.
+   # - Configure the secret for PASSWORD environment variable
+   # - Add ConfigMap for the fixed Python files
+
+   # Validate the chart
+   helm lint .
+
+   # Test template rendering
+   helm template .
+   ```
+
+6. **Deploy with Helm (Direct Method)**:
+   ```bash
+   # Install the chart
+   helm install my-metrics-app ./metrics-app
+
+   # Or upgrade if already installed
+   helm upgrade my-metrics-app ./metrics-app
+   ```
+
+7. **Install ArgoCD**:
    ```bash
    kubectl create namespace argocd
    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
    kubectl wait --namespace argocd --for=condition=ready pod --selector=app.kubernetes.io/name=argocd-server --timeout=300s
    ```
 
-4. **Configure ArgoCD**:
+8. **Configure ArgoCD for GitOps Deployment**:
    ```bash
+   # Apply the ArgoCD application manifest
    kubectl apply -f argocd.yaml
+
+   # Check the sync status
+   kubectl get applications -n argocd
    ```
 
-5. **Access the Application**:
+9. **Access the Application**:
    ```bash
    # Test the counter endpoint
    curl localhost/counter
    ```
 
 ## Testing and Verification
+
+### Helm Chart Testing
+
+Before deploying the application, validate the Helm chart:
+
+```bash
+# Lint the chart to check for issues
+helm lint metrics-app
+
+# Render the templates without installing
+helm template metrics-app
+
+# Perform a dry run to validate against the cluster
+helm install --dry-run --debug test-release metrics-app
+```
+
+### Helm Test
+
+The chart includes a test that can be run after deployment:
+
+```bash
+# Run the Helm test
+helm test my-metrics-app
+
+# Expected output should indicate successful connection to the service
+```
+
+### Application Testing
 
 To verify the application is working correctly:
 
@@ -328,6 +465,21 @@ for i in $(seq 0 3); do curl -s localhost/counter; echo; done
 # Counter value: 2
 # Counter value: 3
 # Counter value: 4
+```
+
+### Verifying the Fix
+
+To confirm that the performance issues have been resolved:
+
+```bash
+# Test response times (should be consistent and fast)
+for i in {1..5}; do time curl -s localhost/counter; echo; sleep 1; done
+
+# Check for CPU usage (should remain stable)
+kubectl top pod -l app=metrics-app
+
+# Verify no suspicious processes are running
+kubectl exec -it $(kubectl get pod -l app=metrics-app -o jsonpath='{.items[0].metadata.name}') -- ps aux
 ```
 
 ## Monitoring and Debugging
